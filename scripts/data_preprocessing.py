@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from statistics import median
 from typing import Any
 
 import pandas as pd
 
 from scripts.helper_functions import parse_product_list
 
-REQUIRED_COLUMNS = [
+# ── Column contracts ────────────────────────────────────────────────────────
+
+REQUIRED_COLUMNS: list[str] = [
 	"customer_id",
 	"viewed_products",
 	"bought_products",
@@ -18,88 +19,135 @@ REQUIRED_COLUMNS = [
 	"time_spent_in_minutes",
 ]
 
-PRODUCT_LIST_COLUMNS = [
+PRODUCT_LIST_COLUMNS: list[str] = [
 	"viewed_products",
 	"bought_products",
 	"put_in_cart_products",
 ]
 
 
+# ── Step 0: Loading & Cleaning ──────────────────────────────────────────────
+
 def load_visits_data(data_path: str | Path) -> pd.DataFrame:
+	"""Load the raw visits TSV and validate that all required columns are present."""
 	path = Path(data_path)
-	dataframe = pd.read_csv(path, sep="\t")
-
-	missing_columns = [col for col in REQUIRED_COLUMNS if col not in dataframe.columns]
-	if missing_columns:
-		raise ValueError(f"Missing required columns: {missing_columns}")
-
-	return dataframe
+	df = pd.read_csv(path, sep="\t")
+	missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+	if missing:
+		raise ValueError(f"Input file is missing required columns: {missing}")
+	return df
 
 
-def normalize_product_lists(dataframe: pd.DataFrame) -> pd.DataFrame:
-	processed = dataframe.copy()
-	for column in PRODUCT_LIST_COLUMNS:
-		processed[column] = processed[column].apply(parse_product_list)
-	return processed
+def process_product_columns(df: pd.DataFrame) -> pd.DataFrame:
+	"""Parse the three product-list columns from raw strings into real Python lists,
+	deduplicate each list while preserving insertion order, and add a 'total_*'
+	integer count column for each.
+
+	e.g.  "viewed_products" → list[int]  +  "total_viewed_products" → int
+	"""
+	out = df.copy()
+	for col in PRODUCT_LIST_COLUMNS:
+		out[col] = out[col].apply(parse_product_list)
+		# order-preserving deduplication via dict.fromkeys
+		out[col] = out[col].apply(lambda xs: list(dict.fromkeys(xs)))
+		out[f"total_{col}"] = out[col].apply(len)
+	return out
 
 
-def audit_visits_data(dataframe: pd.DataFrame) -> dict[str, Any]:
-	parse_errors: dict[str, int] = {}
-	empty_list_counts: dict[str, int] = {}
+def add_datetime_features(df: pd.DataFrame) -> pd.DataFrame:
+	"""Derive datetime columns and extract temporal features.
 
-	for column in PRODUCT_LIST_COLUMNS:
-		raw_series = dataframe[column]
-		parsed_series = raw_series.apply(parse_product_list)
-		parse_errors[column] = int(
-			((raw_series.astype(str).str.strip() != "") \
-	          & \
-			 (parsed_series.apply(len) == 0)
-			).sum()
-		)
-		empty_list_counts[column] = int((parsed_series.apply(len) == 0).sum())
+	- end_dt         : UNIX-ms timestamp → datetime, floored to 10 ms
+	- end_hour       : hour of day (0–23)
+	- end_dayofweek  : day of week (1=Mon … 7=Sun)
+	- time_spent_in_minutes : converted to timedelta (used to derive start_dt,
+	                          later converted back to float in feature engineering)
+	- start_dt       : end_dt – time_spent_in_minutes, floored to 10 ms
+	- start_hour     : hour of day the session started
+	- start_dayofweek: day of week the session started
+	"""
+	out = df.copy()
 
-	visits_per_customer = dataframe.groupby("customer_id").size()
+	out["end_dt"] = pd.to_datetime(out["end"], unit="ms", utc=False).dt.floor("10ms")
+	out["end_hour"] = out["end_dt"].dt.hour
+	out["end_dayofweek"] = out["end_dt"].dt.dayofweek + 1  # 1=Mon
 
+	# Store as timedelta so we can compute start_dt correctly.
+	# Feature engineering will convert it back to float (minutes).
+	out["time_spent_in_minutes"] = pd.to_timedelta(out["time_spent_in_minutes"], unit="m")
+	out["start_dt"] = (out["end_dt"] - out["time_spent_in_minutes"]).dt.floor("10ms")
+	out["start_hour"] = out["start_dt"].dt.hour
+	out["start_dayofweek"] = out["start_dt"].dt.dayofweek + 1  # 1=Mon
+
+	return out
+
+
+# ── Step 1: Target variable ─────────────────────────────────────────────────
+
+def build_return_time_target(df: pd.DataFrame) -> pd.DataFrame:
+	"""Attach the regression target and visit-level metadata to each row.
+
+	For each customer, visits are sorted chronologically by start_dt.
+	The target is:
+	    return_hours = next_visit.start_dt − current_visit.end_dt   (in hours)
+
+	Negative gaps are clipped to 0 (caused by overlapping/multi-device sessions).
+	Last visits per customer have no known next visit → return_hours is NaN.
+
+	Added columns:
+	  - return_hours       : target (hours until next visit; NaN for last visits)
+	  - visit_is_this_last : True for each customer's final recorded visit
+	  - visit_counter_index: 0-based chronological visit sequence number per customer
+	  - visit_bought_flag  : True if ≥1 product was purchased on this visit
+	"""
+	out = df.sort_values(["customer_id", "start_dt"]).reset_index(drop=True)
+
+	# For each visit, look up the start time of the customer's NEXT visit.
+	out["next_start_dt"] = out.groupby("customer_id")["start_dt"].shift(-1)
+
+	raw_gap = (out["next_start_dt"] - out["end_dt"]).dt.total_seconds() / 3600
+	n_negative = int((raw_gap < 0).sum())
+	if n_negative:
+		print(f"  ⚠  {n_negative} overlapping sessions (negative gap) clipped to 0.")
+
+	out["return_hours"] = raw_gap.clip(lower=0)
+	out["visit_is_this_last"] = out["next_start_dt"].isna()
+	out["visit_counter_index"] = out.groupby("customer_id").cumcount()
+	out["visit_bought_flag"] = out["total_bought_products"] > 0
+
+	return out
+
+
+# ── Orchestrator ────────────────────────────────────────────────────────────
+
+def load_and_prepare(data_path: str | Path) -> pd.DataFrame:
+	"""Run the full preprocessing pipeline in one call.
+
+	Steps: load TSV → parse product lists → datetime features → return-time target.
+
+	The returned DataFrame is sorted by (customer_id, start_dt).
+	Last-visit rows (return_hours = NaN) are *kept* so callers can decide
+	whether to drop them (modelling needs to drop them; prediction keeps them).
+	"""
+	df = load_visits_data(data_path)
+	df = process_product_columns(df)
+	df = add_datetime_features(df)
+	df = build_return_time_target(df)
+	return df
+
+
+# ── Optional: data quality audit ────────────────────────────────────────────
+
+def audit_visits_data(df: pd.DataFrame) -> dict[str, Any]:
+	"""Return a summary of basic data quality statistics for the raw DataFrame."""
+	visits_per_customer = df.groupby("customer_id").size()
 	return {
-		"row_count": int(len(dataframe)),
-		"column_count": int(len(dataframe.columns)),
-		"unique_customers": int(dataframe["customer_id"].nunique()),
-		"missing_values": {k: int(v) for k, v in dataframe.isna().sum().to_dict().items()},
-		"duplicate_rows": int(dataframe.duplicated().sum()),
-		"list_parse_errors": parse_errors,
-		"empty_list_counts": empty_list_counts,
-		"negative_time_spent_count": int((dataframe["time_spent_in_minutes"] < 0).sum()),
-		"negative_search_count": int((dataframe["num_of_times_search_was_used"] < 0).sum()),
-		"end_timestamp_min": int(dataframe["end"].min()),
-		"end_timestamp_max": int(dataframe["end"].max()),
-		"time_spent_min": float(dataframe["time_spent_in_minutes"].min()),
-		"time_spent_max": float(dataframe["time_spent_in_minutes"].max()),
+		"row_count": int(len(df)),
+		"unique_customers": int(df["customer_id"].nunique()),
+		"missing_values": {k: int(v) for k, v in df.isna().sum().items()},
+		"duplicate_rows": int(df.duplicated().sum()),
+		"negative_time_spent_count": int((df["time_spent_in_minutes"] < 0).sum()),
 		"visits_per_customer_min": int(visits_per_customer.min()),
-		"visits_per_customer_median": float(median(visits_per_customer.tolist())),
+		"visits_per_customer_median": float(visits_per_customer.median()),
 		"visits_per_customer_max": int(visits_per_customer.max()),
 	}
-
-
-def load_and_audit_visits(data_path: str | Path) -> tuple[pd.DataFrame, dict[str, Any]]:
-	dataframe = load_visits_data(data_path)
-	audit_summary = audit_visits_data(dataframe)
-	normalized = normalize_product_lists(dataframe)
-	return normalized, audit_summary
-
-
-def build_return_time_target(
-	dataframe: pd.DataFrame,
-	customer_column: str = "customer_id",
-	end_column: str = "end",
-	target_column: str = "return_time_hours",
-	drop_censored: bool = True,
-) -> pd.DataFrame:
-	target_df = dataframe.copy()
-	target_df = target_df.sort_values([customer_column, end_column]).reset_index(drop=True)
-	target_df["next_end"] = target_df.groupby(customer_column)[end_column].shift(-1)
-	target_df[target_column] = (target_df["next_end"] - target_df[end_column]) / (1000 * 60 * 60)
-
-	if drop_censored:
-		target_df = target_df[target_df[target_column].notna()].reset_index(drop=True)
-
-	return target_df
