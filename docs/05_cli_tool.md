@@ -58,7 +58,6 @@ python main.py train [OPTIONS]
 | `--data` / `-d` | `data/visits.tsv` | Input visits TSV file |
 | `--model-dir` / `-m` | `scripts/models` | Directory to save the trained suite |
 | `--val-fraction` | `0.20` | Fraction of data (by time) held out for validation |
-| `--skip-lgb` | `False` | Skip LightGBM DART (slow); trains 5 models instead of 6 |
 
 **What it does — step by step:**
 
@@ -70,12 +69,6 @@ python main.py train [OPTIONS]
 6. Train all six models in order (see [Models](#models))
 7. Print the evaluation leaderboard on the val set
 8. Save the entire `ModelSuite` to `<model-dir>/model_suite.joblib`
-
-**Example — quick run skipping the slow LightGBM model:**
-
-```bash
-python main.py train --skip-lgb
-```
 
 **Example — custom paths:**
 
@@ -123,8 +116,7 @@ python main.py predict --model hgb --output output/hgb_predictions.tsv
 ### `evaluate`
 
 Re-runs evaluation on the validation split using an already-trained `ModelSuite`,
-reproducing the exact train/val split from training. Optionally computes permutation
-feature importance for the LightGBM model.
+reproducing the exact train/val split from training.
 
 ```
 python main.py evaluate [OPTIONS]
@@ -135,12 +127,11 @@ python main.py evaluate [OPTIONS]
 | `--data` / `-d` | `data/visits.tsv` | Input visits TSV file |
 | `--model-dir` / `-m` | `scripts/models` | Directory containing the saved suite |
 | `--val-fraction` | `0.20` | Validation fraction (should match the training run) |
-| `--importance` | `False` | Print permutation feature importance (slow, ~minutes) |
 
-**Example — full evaluation with feature importance:**
+**Example:**
 
 ```bash
-python main.py evaluate --importance
+python main.py evaluate
 ```
 
 ---
@@ -170,7 +161,7 @@ without repeating the expensive training step:
 
 ```bash
 python main.py train   --data data/visits.tsv   # run once
-python main.py evaluate --importance             # run any number of times
+python main.py evaluate                          # run any number of times
 ```
 
 ### Experimenting with Individual Models
@@ -215,7 +206,7 @@ Responsible for loading the raw TSV and constructing the regression target.
 | `add_datetime_features(df)` | UNIX-ms → `end_dt`, derive `start_dt`, `*_hour`, `*_dayofweek` |
 | `build_return_time_target(df)` | Sort by `(customer_id, start_dt)`, compute `return_hours` via time-to-next-visit |
 | `load_and_prepare(data_path)` | Orchestrator: calls all four functions above in sequence |
-| `audit_visits_data(df)` | Optional: compute quality statistics (row counts, null rates, etc.) |
+| `audit_dataset(df)` | Optional: compute quality statistics (row counts, null rates, etc.) |
 
 **Target construction:**  
 Visits are sorted per-customer by `start_dt`. For each visit, `next_start_dt` is
@@ -295,11 +286,15 @@ distribution.
 
 | Method | Description |
 |--------|-------------|
-| `train_all(train_df, verbose, skip_lgb)` | Train all (or 5) models, log progress |
+| `train_all(train_df, verbose)` | Train all 6 models and log progress |
 | `predict(model_name, X)` | Predict in hours scale for any of the six models |
-| `predict_best(X)` | Shortcut: calls `predict("lgb", X)` |
 | `save(model_dir)` | `joblib.dump(self, model_dir / model_suite.joblib)` |
-| `ModelSuite.load(model_dir)` | `joblib.load(...)`, raises `FileNotFoundError` with a helpful message |
+
+The `ModelSuite` is loaded via a standalone module-level function (not a classmethod):
+
+| Function | Description |
+|----------|-------------|
+| `load_model_suite(model_dir)` | `joblib.load(...)`, raises `FileNotFoundError` with a helpful message |
 
 ---
 
@@ -318,7 +313,6 @@ distribution.
 
 | Function | Description |
 |----------|-------------|
-| `parse_product_list(value)` | Parse a string-encoded list into `list[int]` |
 | `ensure_parent_dir(file_path)` | Create parent directories as needed |
 | `save_json(data, output_path)` | Serialise a dict to JSON |
 | `load_json(input_path)` | Load JSON into a dict |

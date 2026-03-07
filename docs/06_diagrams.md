@@ -1,308 +1,240 @@
 # Pipeline Diagrams
 
-Decision logic and data-flow visualisations for the CLI tool and all supporting
-modules. Every diagram is self-contained and can be rendered in any Mermaid-aware
-viewer (VS Code with the Markdown Preview Mermaid Support extension, GitHub, etc.).
+Mermaid diagrams covering the CLI commands, data flow, and decision logic.
 
 ---
 
 ## 1. System Architecture
 
-High-level view of how the three CLI commands relate to the script modules,
-input data, and persisted artefacts.
-
 ```mermaid
 flowchart LR
-    TSV[("data/visits.tsv")]
-    SUITE[("scripts/models/\nmodel_suite.joblib")]
-    OUT[("output/predictions.tsv")]
+    TSV[("visits.tsv")]
+    SUITE[("model_suite.joblib")]
+    OUT[("predictions.tsv")]
 
-    subgraph CLI ["main.py — Typer CLI"]
+    subgraph CLI ["main.py"]
         TRAIN["train"]
         PREDICT["predict"]
         EVALUATE["evaluate"]
     end
 
     subgraph Scripts ["scripts/"]
-        PRE["data_preprocessing.py"]
-        FE["feature_engineering.py"]
-        MOD["data_modelling.py\n(ModelSuite)"]
-        EVAL["evaluation.py"]
+        PRE["data_preprocessing"]
+        FE["feature_engineering"]
+        MOD["data_modelling"]
+        EVAL["evaluation"]
     end
 
-    TSV -->|input| TRAIN
-    TSV -->|input| PREDICT
-    TSV -->|input| EVALUATE
-
-    TRAIN --> PRE --> FE --> MOD
-    MOD --> EVAL
+    TSV -->|input| TRAIN & PREDICT & EVALUATE
+    TRAIN --> PRE --> FE --> MOD --> EVAL
     TRAIN -->|saves| SUITE
-
-    SUITE -->|loads| PREDICT
-    PREDICT --> PRE
+    SUITE -->|loads| PREDICT & EVALUATE
     PREDICT -->|writes| OUT
-
-    SUITE -->|loads| EVALUATE
-    EVALUATE --> PRE
 ```
 
 ---
 
-## 2. `train` Command — Decision Flow
+## 2. `train` Command
 
 ```mermaid
 flowchart TD
-    START(["python main.py train"])
-    LOAD["load_and_prepare(data_path)\n─────────────────────\nRead TSV → parse product lists\nadd datetime features\nbuild return_hours target"]
-    FEAT["build_features(df)\n─────────────────────\nSession ratios · purchase history\nlag features · rolling averages"]
-    FILTER["Filter rows where return_hours is not NaN\n(last visit per customer has no known target)"]
-    SPLIT["chronological_split(df, val_fraction)\n─────────────────────────────────────\nSplit at end_dt quantile(1 − val_fraction)\nTrain = older rows · Val = newer rows"]
-    DRIFT["check_target_drift(y_train, y_val)"]
-    DRIFTQ{drift > 10 %?}
-    WARN["⚠  Print warning:\ndistributions may differ"]
-    OK["✓  Distribution stable"]
-    SUITE["suite = ModelSuite()"]
-    LGBQ{--skip-lgb?}
-    TRAIN5["train_all(train_df, skip_lgb=True)\nTrain 5 models:\nGlobal Median · Segmented Median\nHGB · RandomForest · XGBoost"]
-    TRAIN6["train_all(train_df)\nTrain 6 models:\nGlobal Median · Segmented Median\nHGB · RandomForest · XGBoost\nLightGBM DART"]
-    EVALALL["Predict all trained models on val set\nregression_metrics(y_val, y_pred)\nfor each model"]
-    BOARD["print_leaderboard(results)\nMAE · RMSE · % vs Global Median baseline"]
-    SAVE["suite.save(model_dir)\nWrite model_suite.joblib"]
+    START(["train"])
+    LOAD["load_and_prepare"]
+    FEAT["build_features"]
+    FILTER["drop NaN target rows"]
+    SPLIT["chronological_split"]
+    DRIFT{target drift > 10%?}
+    WARN["log warning"]
+    SUITE["ModelSuite()"]
+    EVAL["evaluate on val set"]
+    BOARD["print_leaderboard"]
+    SAVE["suite.save"]
     DONE(["Done"])
 
-    START --> LOAD --> FEAT --> FILTER --> SPLIT --> DRIFT --> DRIFTQ
-    DRIFTQ -->|Yes| WARN --> SUITE
-    DRIFTQ -->|No| OK --> SUITE
-    SUITE --> LGBQ
-    LGBQ -->|Yes| TRAIN5 --> EVALALL
-    LGBQ -->|No| TRAIN6 --> EVALALL
-    EVALALL --> BOARD --> SAVE --> DONE
+    START --> LOAD --> FEAT --> FILTER --> SPLIT --> DRIFT
+    DRIFT -->|Yes| WARN --> SUITE
+    DRIFT -->|No| SUITE
+    SUITE --> TRAIN["train_all: all 6 models"] --> EVAL
+    EVAL --> BOARD --> SAVE --> DONE
 ```
 
 ---
 
-## 3. `predict` Command — Decision Flow
+## 3. `predict` Command
 
 ```mermaid
 flowchart TD
-    START(["python main.py predict"])
-    CHKFILE{"model_suite.joblib\nexists?"}
-    ERR["FileNotFoundError\n'Run python main.py train first'"]
-    LOADM["ModelSuite.load(model_dir)\njoblib.load(model_suite.joblib)"]
-    LOAD["load_and_prepare(data_path)\nAll rows kept — including\nlast-visit rows (no known target)"]
-    FEAT["build_features(df)\nCompute all 23 FEATURE_COLS"]
+    START(["predict"])
+    CHK{"model file exists?"}
+    ERR["FileNotFoundError"]
+    LOAD["load_model_suite"]
+    PREP["load_and_prepare + build_features"]
     PRED["suite.predict(model_name, X)"]
-    ROUTER{model_name}
-
-    GLOB["return np.full(len(X), global_median)\nSame scalar for every row"]
-    SEG["Join seg_medians on\n(ever_bought, start_dayofweek)\nfillna(global_median) for unseen segments"]
-    ML["raw = model.predict(X)   ← log1p scale\npreds = expm1(raw).clip(min=0)   ← hours"]
-    VALERR["ValueError\nPrint valid model name options"]
-
-    BUILD["Build output DataFrame:\ncustomer_id · start_dt · end_dt\npredicted_return_hours · predicted_return_days"]
-    ACTQ{"return_hours present\nin input data?"}
-    WITHACT["Include actual return_hours\ncolumn in output"]
-    NOACT["Omit column\n(unseen / future data)"]
-    WRITE["Write TSV to output path\n(creates parent dirs if needed)"]
+    ROUTER{model_name?}
+    GLOB["return global_median constant"]
+    SEG["lookup seg_medians, fallback to global_median"]
+    ML["expm1(model.predict(X)).clip(0)"]
+    VALERR["ValueError: invalid model name"]
+    WRITE["write predictions TSV"]
     DONE(["Done"])
 
-    START --> CHKFILE
-    CHKFILE -->|No| ERR
-    CHKFILE -->|Yes| LOADM --> LOAD --> FEAT --> PRED --> ROUTER
-
-    ROUTER -->|global_baseline| GLOB --> BUILD
-    ROUTER -->|seg_baseline| SEG --> BUILD
-    ROUTER -->|hgb · rf · xgb · lgb| ML --> BUILD
+    START --> CHK
+    CHK -->|No| ERR
+    CHK -->|Yes| LOAD --> PREP --> PRED --> ROUTER
+    ROUTER -->|global_baseline| GLOB --> WRITE
+    ROUTER -->|seg_baseline| SEG --> WRITE
+    ROUTER -->|hgb, rf, xgb, lgb| ML --> WRITE
     ROUTER -->|other| VALERR
-
-    BUILD --> ACTQ
-    ACTQ -->|Yes| WITHACT --> WRITE
-    ACTQ -->|No| NOACT --> WRITE
     WRITE --> DONE
 ```
 
 ---
 
-## 4. `evaluate` Command — Decision Flow
+## 4. `evaluate` Command
 
 ```mermaid
 flowchart TD
-    START(["python main.py evaluate"])
-    CHKFILE{"model_suite.joblib\nexists?"}
+    START(["evaluate"])
+    CHK{"model file exists?"}
     ERR["FileNotFoundError"]
-    LOADM["ModelSuite.load(model_dir)"]
-    PREP["load_and_prepare + build_features\nReproduce same feature columns\nas used during training"]
-    FILTER["Filter: return_hours is not NaN"]
-    SPLIT["chronological_split(df, val_fraction)\nMust use same val_fraction as training\nto reproduce the identical split"]
-    DRIFT["check_target_drift(y_train, y_val)"]
-    DRIFTQ{drift > 10 %?}
-    WARN["⚠  Print drift warning"]
-    OK["✓  Stable"]
-    EVAL5["Evaluate 5 always-present models:\nGlobal Median · Segmented Median\nHGB · RandomForest · XGBoost"]
-    LGBQ{suite.lgb\nis not None?}
-    EVAL6["Also evaluate LightGBM DART"]
-    SKIPLGB["Skip LGB\n(was trained with --skip-lgb)"]
-    BOARD["print_leaderboard(results)"]
-    IMPQ{--importance\nflag set?}
-    LGBAVAIL{suite.lgb\navailable?}
-    NOWARN["⚠  LightGBM not available\n(skip-lgb was used at training time)"]
-    PERM["compute_permutation_importance\n(suite.lgb, X_val, log1p(y_val))\nn_repeats=10, n_jobs=-1"]
-    TOP15["Print top 15 features\nby importance_mean"]
+    LOAD["load_model_suite"]
+    PREP["load_and_prepare + build_features"]
+    SPLIT["chronological_split"]
+    DRIFT{target drift > 10%?}
+    WARN["log warning"]
+    EVAL["evaluate all available models"]
+    BOARD["print_leaderboard"]
     DONE(["Done"])
 
-    START --> CHKFILE
-    CHKFILE -->|No| ERR
-    CHKFILE -->|Yes| LOADM --> PREP --> FILTER --> SPLIT --> DRIFT --> DRIFTQ
-    DRIFTQ -->|Yes| WARN --> EVAL5
-    DRIFTQ -->|No| OK --> EVAL5
-    EVAL5 --> LGBQ
-    LGBQ -->|Yes| EVAL6 --> BOARD
-    LGBQ -->|No| SKIPLGB --> BOARD
-    BOARD --> IMPQ
-    IMPQ -->|No| DONE
-    IMPQ -->|Yes| LGBAVAIL
-    LGBAVAIL -->|No| NOWARN --> DONE
-    LGBAVAIL -->|Yes| PERM --> TOP15 --> DONE
+    START --> CHK
+    CHK -->|No| ERR
+    CHK -->|Yes| LOAD --> PREP --> SPLIT --> DRIFT
+    DRIFT -->|Yes| WARN --> EVAL
+    DRIFT -->|No| EVAL
+    EVAL --> BOARD --> DONE([" Done "])
 ```
 
 ---
 
-## 5. Preprocessing Pipeline (`data_preprocessing.py`)
+## 5. Preprocessing Pipeline
 
 ```mermaid
 flowchart TD
-    RAW[("data/visits.tsv\nRaw tab-separated input")]
-    VALIDATE["load_visits_data()\n──────────────────\npd.read_csv(sep=tab)\nCheck all REQUIRED_COLUMNS present"]
-    COLCHECK{"Required columns\nmissing?"}
-    COLERR["ValueError:\nlist missing column names"]
-    PARSE["process_product_columns()\n──────────────────────────\nFor each of: viewed_products,\nbought_products, put_in_cart_products:\n  parse string → list[int]\n  deduplicate (order-preserving)\n  add total_* integer count column"]
-    DATETIME["add_datetime_features()\n────────────────────────\nend (UNIX-ms) → end_dt (floor 10ms)\nend_hour, end_dayofweek\ntime_spent_in_minutes → timedelta\nstart_dt = end_dt − time_spent\nstart_hour, start_dayofweek"]
-    TARGET["build_return_time_target()\n──────────────────────────\nSort by (customer_id, start_dt)\nnext_start_dt = shift(-1) per customer\nreturn_hours = (next_start_dt − end_dt)\n               in hours, clipped ≥ 0\nvisit_counter_index = cumcount()\nvisit_bought_flag = bought_products > 0\nvisit_is_this_last = next_start_dt is NaN"]
-    NEGQ{"Negative gaps\ndetected?"}
-    NEGWARN["Print: 'N overlapping sessions\n(negative gap) clipped to 0'"]
-    OUT[("Prepared DataFrame\nSorted by (customer_id, start_dt)\nLast-visit rows kept\n(return_hours = NaN for them)")]
+    RAW[("visits.tsv")]
+    VAL["load_visits_data: validate columns"]
+    COLQ{columns missing?}
+    ERR["ValueError"]
+    PARSE["process_product_columns: parse lists, deduplicate, add total_* counts"]
+    DT["add_datetime_features: UNIX-ms to end_dt, derive start_dt, extract hour + dayofweek"]
+    TARGET["build_return_time_target: sort by customer + time, compute return_hours via next visit gap"]
+    NEGQ{negative gaps?}
+    CLIP["clip to 0, log warning"]
+    OUT[("prepared DataFrame")]
 
-    RAW --> VALIDATE --> COLCHECK
-    COLCHECK -->|Yes| COLERR
-    COLCHECK -->|No| PARSE --> DATETIME --> TARGET --> NEGQ
-    NEGQ -->|Yes| NEGWARN --> OUT
+    RAW --> VAL --> COLQ
+    COLQ -->|Yes| ERR
+    COLQ -->|No| PARSE --> DT --> TARGET --> NEGQ
+    NEGQ -->|Yes| CLIP --> OUT
     NEGQ -->|No| OUT
 ```
 
 ---
 
-## 6. Feature Engineering Pipeline (`feature_engineering.py`)
+## 6. Feature Engineering Pipeline
 
-All steps operate within each customer group to prevent cross-customer leakage.
-All lag/history features apply `shift(1)` so a visit cannot see its own outcome.
+All features use `shift(1)` within customer groups — no future leakage.
 
 ```mermaid
 flowchart TD
-    IN[("Preprocessed DataFrame\nfrom load_and_prepare()")]
-
-    SESS["add_session_features()\n─────────────────────\nConvert time_spent timedelta → float minutes\nbuy_ratio  = total_bought / total_viewed\n             (0 if no products viewed)\ncart_ratio = total_carted / total_viewed\n             (0 if no products viewed)"]
-
-    HIST["add_purchase_history_features()\n────────────────────────────────\npast_bought = shift(1) of visit_bought_flag\n              (looks only backwards)\never_bought           = cummax(past_bought)\ncumulative_bought_visits = cumsum(past_bought)\ncumulative_buy_rate = cumulative_bought / visit_counter\n                      (NaN for first visit)"]
-
-    LAG["add_lag_features()\n───────────────────\nFor each customer, shift(1):\n  prev_end_dt\n  prev_time_spent\n  prev_search_count\n  prev_viewed_count\n  prev_bought\nprev_gap_hours = (start_dt − prev_end_dt)\n                 in hours, clipped ≥ 0"]
-
-    ROLL["add_rolling_features()\n──────────────────────\nrolling(window=3, min_periods=1):\n  rolling_avg_gap\n  rolling_avg_time_spent\n  rolling_avg_viewed\nshift(1) + expanding().mean():\n  cumulative_avg_gap\n  (extra shift keeps current gap out)"]
-
-    OUT[("Feature-complete DataFrame\n23 features in FEATURE_COLS\nReady for modelling")]
+    IN[("preprocessed DataFrame")]
+    SESS["add_session_features: time_spent float, buy_ratio, cart_ratio"]
+    HIST["add_purchase_history_features: ever_bought, cumulative_bought_visits, cumulative_buy_rate"]
+    LAG["add_lag_features: prev_gap_hours, prev_time_spent, prev_search_count, prev_viewed, prev_bought"]
+    ROLL["add_rolling_features: 3-visit rolling averages, expanding cumulative_avg_gap"]
+    OUT[("23 features in FEATURE_COLS")]
 
     IN --> SESS --> HIST --> LAG --> ROLL --> OUT
 ```
 
 ---
 
-## 7. `ModelSuite.predict()` Routing Logic
+## 7. `ModelSuite.predict()` Routing
 
 ```mermaid
 flowchart TD
     CALL["predict(model_name, X)"]
-    ROUTER{model_name}
+    R{model_name?}
 
-    GB{"global_median\nfitted?"}
-    GBERR["RuntimeError:\nModel not trained —\ncall train_all() first"]
-    GBRET["return np.full(len(X), global_median)\nConstant prediction for all rows"]
+    GBQ{global_median fitted?}
+    GBERR["RuntimeError"]
+    GBRET["return constant global_median"]
 
-    SB{"seg_medians\nfitted?"}
-    SBERR["RuntimeError:\nModel not trained"]
-    SBRET["Join seg_medians on\n(ever_bought × start_dayofweek)\nRows with unseen segment → fillna(global_median)\nreturn as numpy array"]
+    SBQ{seg_medians fitted?}
+    SBERR["RuntimeError"]
+    SBRET["lookup seg_medians, fallback to global_median"]
 
-    ML["Look up model in\n{hgb, rf, xgb, lgb} map"]
+    ML["look up in model map"]
     MLNULL{model is None?}
-    MLERR["ValueError:\nModel unknown or not yet trained"]
-    MLRET["raw_log = model.predict(X)\npreds    = expm1(raw_log).clip(min=0)\nreturn preds as numpy array"]
+    MLERR["ValueError"]
+    MLRET["expm1(model.predict(X)).clip(0)"]
 
-    UNK["ValueError:\nUnknown model_name\nPrint list of valid options"]
+    UNK["ValueError: invalid name"]
 
-    CALL --> ROUTER
-    ROUTER -->|"'global_baseline'"| GB
-    GB -->|No| GBERR
-    GB -->|Yes| GBRET
+    CALL --> R
+    R -->|global_baseline| GBQ
+    GBQ -->|No| GBERR
+    GBQ -->|Yes| GBRET
 
-    ROUTER -->|"'seg_baseline'"| SB
-    SB -->|No| SBERR
-    SB -->|Yes| SBRET
+    R -->|seg_baseline| SBQ
+    SBQ -->|No| SBERR
+    SBQ -->|Yes| SBRET
 
-    ROUTER -->|"'hgb' / 'rf' / 'xgb' / 'lgb'"| ML --> MLNULL
+    R -->|hgb, rf, xgb, lgb| ML --> MLNULL
     MLNULL -->|Yes| MLERR
     MLNULL -->|No| MLRET
 
-    ROUTER -->|anything else| UNK
+    R -->|other| UNK
 ```
 
 ---
 
-## 8. Chronological Split Logic
+## 8. Chronological Split
 
-Random shuffling would allow future data to leak into the training set.
-The quantile-based split below guarantees the val set is strictly in the future
-relative to the training set.
+No shuffling — the val set is always in the future relative to train.
 
 ```mermaid
 flowchart TD
-    IN["chronological_split(df, time_col, val_fraction)"]
-    CHECK{0 < val_fraction < 1?}
-    ERR["ValueError: val_fraction out of range"]
-    QUANTILE["split_time = df[time_col].quantile(1 − val_fraction)\ne.g. val_fraction=0.20 → quantile(0.80)"]
-    TRAINDF["train_df = df[ end_dt <= split_time ]\nAll older / contemporary rows"]
-    VALDF["val_df = df[ end_dt > split_time ]\nAll strictly newer rows"]
-    NOOVERLAP{"Any row\noverlap?"}
-    SAFE["No overlap by construction:\ntrain rows are never in val,\nval rows are never in train"]
-    OUT[("Return (train_df, val_df)")]
+    IN["chronological_split(df, val_fraction)"]
+    CHK{val_fraction in range?}
+    ERR["ValueError"]
+    Q["split_time = quantile(1 - val_fraction) of end_dt"]
+    TRAIN["train_df: end_dt <= split_time"]
+    VAL["val_df:   end_dt >  split_time"]
+    OUT[("train_df, val_df — no overlap")]
 
-    IN --> CHECK
-    CHECK -->|No| ERR
-    CHECK -->|Yes| QUANTILE
-    QUANTILE --> TRAINDF & VALDF
-    TRAINDF --> NOOVERLAP
-    VALDF --> NOOVERLAP
-    NOOVERLAP -->|Never| SAFE --> OUT
+    IN --> CHK
+    CHK -->|No| ERR
+    CHK -->|Yes| Q --> TRAIN & VAL --> OUT
 ```
 
 ---
 
-## 9. Target Construction Detail
-
-How `return_hours` is built for each row within `build_return_time_target()`.
+## 9. Target Construction (`return_hours`)
 
 ```mermaid
 flowchart TD
-    SORT["Sort all rows by (customer_id, start_dt)"]
-    SHIFT["next_start_dt = shift(-1)\nwithin each customer group"]
-    LAST{"Is next_start_dt\nNaN?"}
-    LASTROW["This is the customer's\nlast recorded visit\nreturn_hours = NaN\nvisit_is_this_last = True"]
-    GAP["raw_gap_hours =\n(next_start_dt − end_dt).total_seconds() / 3600"]
-    CLIPQ{"raw_gap_hours < 0?\n(overlapping / multi-device sessions)"}
-    CLIP["return_hours = 0\n(clipped — preserves row,\navoids negative targets)"]
-    USE["return_hours = raw_gap_hours"]
-    FLAG["visit_is_this_last = False"]
+    SORT["sort by customer_id, start_dt"]
+    SHIFT["next_start_dt = shift(-1) per customer"]
+    NULLQ{next_start_dt is NaN?}
+    LAST["return_hours = NaN, visit_is_this_last = True"]
+    GAP["gap = (next_start_dt - end_dt) in hours"]
+    NEGQ{gap < 0?}
+    CLIP["return_hours = 0"]
+    KEEP["return_hours = gap"]
 
-    SORT --> SHIFT --> LAST
-    LAST -->|Yes| LASTROW
-    LAST -->|No| GAP --> CLIPQ
-    CLIPQ -->|Yes| CLIP --> FLAG
-    CLIPQ -->|No| USE --> FLAG
+    SORT --> SHIFT --> NULLQ
+    NULLQ -->|Yes| LAST
+    NULLQ -->|No| GAP --> NEGQ
+    NEGQ -->|Yes| CLIP
+    NEGQ -->|No| KEEP
 ```
