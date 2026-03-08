@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-# ── Feature column registry ─────────────────────────────────────────────────
 # All 23 model features, grouped by type for clarity.
 # This list is the single source of truth consumed by modelling and evaluation.
 
 FEATURE_COLS: list[str] = [
-    # ── Within-session engagement ────────────────────────────────────────────
+    # within-session engagement
     "total_viewed_products",
     "total_put_in_cart_products",
     "total_bought_products",
@@ -18,28 +17,26 @@ FEATURE_COLS: list[str] = [
     "start_hour",  # 0–23
     "start_dayofweek",  # 1=Mon … 7=Sun
     "visit_bought_flag",  # 1 if any purchase on this visit
-    # ── Visit sequence position ──────────────────────────────────────────────
+    # sequence position
     "visit_counter_index",  # 0 = first ever visit for this customer
-    # ── Cumulative purchase history (past visits only — leak-safe) ───────────
+    # purchase history (past visits only, leak-safe)
     "ever_bought",  # 1 if customer has ever bought before this visit
     "cumulative_bought_visits",  # count of all prior buying visits
     "cumulative_buy_rate",  # cumulative_bought_visits / past_visits_count  (NaN for 1st visit)
-    # ── Lag / recency features ───────────────────────────────────────────────
+    # lag / recency
     "prev_gap_hours",  # hours between previous visit end and this visit start
     "prev_time_spent",  # session duration of the previous visit (minutes)
     "prev_search_count",  # searches used in the previous visit
     "prev_viewed_count",  # products viewed in the previous visit
     "prev_bought",  # 1.0 if customer purchased on the previous visit
-    # ── Rolling averages (3-visit window over past visits) ───────────────────
+    # rolling averages (3-visit window)
     "rolling_avg_gap",
     "rolling_avg_time_spent",
     "rolling_avg_viewed",
-    # ── Customer-level expanding average ─────────────────────────────────────
+    # customer-level expanding average
     "cumulative_avg_gap",  # expanding mean of prev_gap_hours (excluding current visit)
 ]
 
-
-# ── Step 3a: Session features ───────────────────────────────────────────────
 
 
 def add_session_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -69,8 +66,6 @@ def add_session_features(df: pd.DataFrame) -> pd.DataFrame:
 
     return out
 
-
-# ── Step 3b: Cumulative purchase history (leak-safe) ────────────────────────
 
 
 def add_purchase_history_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -107,8 +102,6 @@ def add_purchase_history_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# ── Step 3c: Lag / recency features ─────────────────────────────────────────
-
 
 def add_lag_features(df: pd.DataFrame) -> pd.DataFrame:
     """Carry forward key metrics from the previous visit per customer.
@@ -133,8 +126,6 @@ def add_lag_features(df: pd.DataFrame) -> pd.DataFrame:
 
     return out
 
-
-# ── Step 3d: Rolling & expanding averages ───────────────────────────────────
 
 
 def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -172,8 +163,6 @@ def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
 
     return out
 
-
-# ── Orchestrator ─────────────────────────────────────────────────────────────
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:

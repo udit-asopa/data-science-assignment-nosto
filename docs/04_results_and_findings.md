@@ -4,12 +4,12 @@
 
 | Model | Val MAE (h) | vs Global Baseline | Notes |
 |---|---|---|---|
-| Global Median Baseline | 32.32 | — | Predicts 30.9h for every row |
-| Segmented Median (ever_bought × dow) | 32.71 | −1.2% ↓ | Worse — drift breaks segment medians |
+| Global Median Baseline | 32.32 | - | Predicts 30.9h for every row |
+| Segmented Median (ever_bought × dow) | 32.71 | −1.2% ↓ | Worse - drift breaks segment medians |
 | HistGradientBoosting | 36.11 | −11.8% ↓ | |
-| Random Forest (tuned) | 32.00 | +1.0% ↑ | Marginal — near-baseline level |
+| Random Forest (tuned) | 32.00 | +1.0% ↑ | Marginal - near-baseline level |
 | XGBoost (tuned) | 36.06 | −11.6% ↓ | |
-| **LightGBM DART** | **29.98** | **+7.2% ↑** | **Best — only model to beat baseline** |
+| **LightGBM DART** | **29.98** | **+7.2% ↑** | **Best - only model to beat baseline** |
 
 All models trained on `log1p(return_hours)`, evaluated on original hours with `expm1(prediction)`.
 
@@ -19,8 +19,8 @@ All models trained on `log1p(return_hours)`, evaluated on original hours with `e
 
 The **48.7% target drift** is the dominant factor:
 
-- **Train median**: 30.9h — the global median baseline predicts this value
-- **Val median**: 15.8h — the true distribution has shifted significantly to shorter return times
+- **Train median**: 30.9h - the global median baseline predicts this value
+- **Val median**: 15.8h - the true distribution has shifted significantly to shorter return times
 - Models trained on train data learn to predict a value near 30.9h; the global median baseline already does exactly this
 - Any additional complexity (features, gradient boosting) is essentially learning noise around the same wrong centre
 
@@ -40,9 +40,9 @@ Permutation importance is used across all 4 models: a feature is masked by shuff
 
 | Rank | Feature | Why it matters |
 |---|---|---|
-| 1 | `start_hour` | Time of day is the strongest signal for return timing — a late-night visit has a different return cadence than a morning visit |
+| 1 | `start_hour` | Time of day is the strongest signal for return timing - a late-night visit has a different return cadence than a morning visit |
 | 2 | `time_spent_in_minutes` | Engagement depth: longer visits indicate higher purchase intent, correlating with sooner return |
-| 3 | `visit_counter_index` | Customer lifecycle position — new vs. regular visitors have fundamentally different return patterns |
+| 3 | `visit_counter_index` | Customer lifecycle position - new vs. regular visitors have fundamentally different return patterns |
 | 4 | `total_viewed_products` | Browse depth as an engagement proxy |
 
 ### The `prev_gap_hours` artefact
@@ -61,12 +61,12 @@ The train vs. val distribution plots (Section 4.2) reveal:
 
 | Feature group | Drift | Interpretation |
 |---|---|---|
-| `return_hours` (target) | **Strong left shift** | Val customers return faster — distribution shifted toward shorter times |
+| `return_hours` (target) | **Strong left shift** | Val customers return faster - distribution shifted toward shorter times |
 | Session features (`total_viewed`, `time_spent`, etc.) | Stable | No meaningful covariate shift |
 | Purchase flags (`visit_bought_flag`, `ever_bought`) | Stable | Purchase behaviour unchanged |
-| Gap features (`prev_gap_hours`, `rolling_avg_gap`, `cumulative_avg_gap`) | Slight left shift | Consistent with target drift — recent gaps were already shorter in val period |
+| Gap features (`prev_gap_hours`, `rolling_avg_gap`, `cumulative_avg_gap`) | Slight left shift | Consistent with target drift - recent gaps were already shorter in val period |
 
-**Conclusion**: this is **target drift without covariate drift**. The input features look the same in both periods, but the outcome distribution changed — possibly driven by a seasonal event (back-to-school, sale period) that compressed return times in late August/September.
+**Conclusion**: this is **target drift without covariate drift**. The input features look the same in both periods, but the outcome distribution changed - possibly driven by a seasonal event (back-to-school, sale period) that compressed return times in late August/September.
 
 ---
 
@@ -74,10 +74,10 @@ The train vs. val distribution plots (Section 4.2) reveal:
 
 ### 1. Survival Modelling (highest priority)
 
-The current approach **drops last-visit rows** (censored observations — ~24% of data). A survival model treats these correctly:
+The current approach **drops last-visit rows** (censored observations - ~24% of data). A survival model treats these correctly:
 
-- **Cox Proportional Hazards**: estimates hazard ratios for each feature — interpretable and handles censoring natively
-- **Weibull AFT (Accelerated Failure Time)**: directly models return time distribution — more appropriate for prediction
+- **Cox Proportional Hazards**: estimates hazard ratios for each feature - interpretable and handles censoring natively
+- **Weibull AFT (Accelerated Failure Time)**: directly models return time distribution - more appropriate for prediction
 
 This would fix a structural problem in the current target definition rather than a modelling choice.
 
@@ -110,7 +110,7 @@ A 12-month window would substantially improve the lag/recency feature signal for
 
 ### 5. Customer-Level Models
 
-For the top 5–10% of customers (high visit frequency), a **per-customer time-series model** (ARIMA on gap sequence, or a simple exponential smoother of past gaps) would likely outperform a global model — their return patterns are stable and idiosyncratic.
+For the top 5–10% of customers (high visit frequency), a **per-customer time-series model** (ARIMA on gap sequence, or a simple exponential smoother of past gaps) would likely outperform a global model - their return patterns are stable and idiosyncratic.
 
 ---
 

@@ -10,9 +10,9 @@
 
 ## Feature Groups
 
-### 1 — Session Features (current visit)
+### 1 - Session Features (current visit)
 
-What happened during this visit. Computed directly from raw columns — no look-back required.
+What happened during this visit. Computed directly from raw columns - no look-back required.
 
 | Feature | Source | Description |
 |---|---|---|
@@ -25,17 +25,17 @@ What happened during this visit. Computed directly from raw columns — no look-
 | `cart_ratio` | `carted / viewed` | Cart conversion within visit |
 | `start_hour` | `start_dt.hour` | Hour of day the visit began (UTC) |
 | `start_dayofweek` | `start_dt.dayofweek + 1` | Day of week (1=Mon, 7=Sun) |
-| `visit_bought_flag` | `total_bought > 0` | Boolean — did the customer buy anything? |
+| `visit_bought_flag` | `total_bought > 0` | Boolean - did the customer buy anything? |
 
-### 2 — Sequence Position
+### 2 - Sequence Position
 
 | Feature | Description |
 |---|---|
 | `visit_counter_index` | 0-based position in this customer's visit history (0 = first ever visit) |
 
-Captures where the customer is in their lifecycle — new visitors behave differently from regulars.
+Captures where the customer is in their lifecycle - new visitors behave differently from regulars.
 
-### 3 — Purchase History (leak-safe cumulative)
+### 3 - Purchase History (leak-safe cumulative)
 
 Computed from **past visits only** using `shift(1)` before cumulative aggregations.
 
@@ -45,7 +45,7 @@ Computed from **past visits only** using `shift(1)` before cumulative aggregatio
 | `cumulative_bought_visits` | `cumsum(shift(visit_bought_flag))` | Number of past visits where a purchase was made |
 | `cumulative_buy_rate` | `cumulative_bought_visits / visit_counter_index` | Fraction of past visits with a purchase (NaN on first visit) |
 
-**Why `shift(1)`?** Without the shift, a visit where the customer buys would see `ever_bought=1` for itself — using the outcome to predict itself. The shift ensures the value reflects history *before* the current visit.
+**Why `shift(1)`?** Without the shift, a visit where the customer buys would see `ever_bought=1` for itself - using the outcome to predict itself. The shift ensures the value reflects history *before* the current visit.
 
 ```python
 # Example implementation (vectorised, no loops)
@@ -60,7 +60,7 @@ feature_engineered_df["ever_bought"] = (
 )
 ```
 
-### 4 — Lag / Recency Features
+### 4 - Lag / Recency Features
 
 Information about the immediately preceding visit.
 
@@ -74,7 +74,7 @@ Information about the immediately preceding visit.
 
 All lag features are `NaN` for a customer's first visit.
 
-### 5 — Rolling History (3-visit window)
+### 5 - Rolling History (3-visit window)
 
 Smoothed signal over the last 3 visits, computed on the shifted lag columns so the current visit is excluded.
 
@@ -86,13 +86,13 @@ Smoothed signal over the last 3 visits, computed on the shifted lag columns so t
 
 `min_periods=1` is used so single-visit customers still get a value from their one available lag.
 
-### 6 — Customer-level Recency
+### 6 - Customer-level Recency
 
 | Feature | Description |
 |---|---|
 | `cumulative_avg_gap` | Expanding mean of all past gaps (excluding current), captures the customer's long-run return rhythm |
 
-`cumulative_avg_gap` is `shift(1)` applied to `prev_gap_hours` before `expanding().mean()` — ensures neither the current gap nor the immediately previous gap pollute the long-run average.
+`cumulative_avg_gap` is `shift(1)` applied to `prev_gap_hours` before `expanding().mean()` - ensures neither the current gap nor the immediately previous gap pollute the long-run average.
 
 ---
 

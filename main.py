@@ -1,5 +1,5 @@
 """
-Nosto — Customer Return Time Prediction CLI
+Nosto - Customer Return Time Prediction CLI
 ===========================================
 Predicts how many hours until a customer's next visit to the webshop.
 
@@ -39,7 +39,6 @@ from scripts.evaluation import (
 )
 from scripts.feature_engineering import FEATURE_COLS, build_features
 
-# ── CLI app ──────────────────────────────────────────────────────────────────
 app = typer.Typer(
     name="nosto-return-time",
     help="Customer return-time prediction pipeline (Nosto data-science assignment).",
@@ -62,8 +61,7 @@ _EVAL_MODEL_ORDER: list[tuple[str, str]] = [
 
 
 def _section(title: str) -> None:
-    pad = max(0, 60 - len(title))
-    typer.echo(f"\n── {title} {'─' * pad}")
+    typer.echo(f"\n{title}")
 
 
 def _build_leaderboard_results(
@@ -80,7 +78,6 @@ def _build_leaderboard_results(
     return results
 
 
-# ── train ─────────────────────────────────────────────────────────────────────
 @app.command()
 def train(
     data: Path = typer.Option(
@@ -103,7 +100,6 @@ def train(
         f"Val split : {val_fraction:.0%} of data reserved for validation"
     )
 
-    # ── Preprocessing ─────────────────────────────────────────────────────────
     _section("Preprocessing")
     df = load_and_prepare(data)
     n_customers = df["customer_id"].nunique()
@@ -117,7 +113,6 @@ def train(
         f"neg_time={audit['negative_time_spent_count']:,}"
     )
 
-    # ── Feature engineering ───────────────────────────────────────────────────
     _section("Feature Engineering")
     df = build_features(df)
     model_df = df[df[TARGET_COL].notna()].copy()
@@ -126,7 +121,6 @@ def train(
         f"  Model-ready rows : {len(model_df):,}  ({n_dropped:,} last-visit rows excluded)."
     )
 
-    # ── Train / val split ─────────────────────────────────────────────────────
     _section("Chronological Split")
     train_df, val_df = chronological_split(model_df, val_fraction=val_fraction)
     typer.echo(
@@ -143,19 +137,16 @@ def train(
         f"val median={drift['val_median_h']:.1f}h  ({drift['drift_pct']:.1f}%)"
     )
 
-    # ── Training ──────────────────────────────────────────────────────────────
     _section("Training")
     suite = ModelSuite()
     suite.train_all(train_df, verbose=True)
 
-    # ── Evaluation ────────────────────────────────────────────────────────────
-    _section("Evaluation — Val Set")
+    _section("Evaluation - Val Set")
     X_val: pd.DataFrame = val_df[FEATURE_COLS]
     y_val: pd.Series = val_df[TARGET_COL]
     results = _build_leaderboard_results(suite, X_val, y_val)
     print_leaderboard(results)
 
-    # ── Save ──────────────────────────────────────────────────────────────────
     _section("Saving")
     saved_path = suite.save(model_dir)
     typer.echo(f"  Saved → {saved_path}")
@@ -164,7 +155,6 @@ def train(
     )
 
 
-# ── predict ───────────────────────────────────────────────────────────────────
 @app.command()
 def predict(
     data: Path = typer.Option(
@@ -189,18 +179,15 @@ def predict(
     typer.echo(f"Model  : {model_name}  (from {model_dir / MODEL_FILENAME})")
     typer.echo(f"Output : {output}")
 
-    # ── Load model ────────────────────────────────────────────────────────────
     _section("Loading Model")
     suite = load_model_suite(model_dir)
     typer.echo(f"  ModelSuite loaded from {model_dir / MODEL_FILENAME}")
 
-    # ── Preprocess & feature engineering ─────────────────────────────────────
     _section("Preprocessing & Feature Engineering")
     df = load_and_prepare(data)
     df = build_features(df)
     typer.echo(f"  {len(df):,} rows ready for prediction.")
 
-    # ── Predict ───────────────────────────────────────────────────────────────
     _section("Prediction")
     X = df[FEATURE_COLS]
     preds = suite.predict(model_name, X)
@@ -208,7 +195,6 @@ def predict(
         f"  Predictions: mean={preds.mean():.1f}h, median={np.median(preds):.1f}h"
     )
 
-    # ── Save output ───────────────────────────────────────────────────────────
     output.parent.mkdir(parents=True, exist_ok=True)
     out_df = df[["customer_id", "start_dt", "end_dt"]].copy()
     out_df["predicted_return_hours"] = preds
@@ -219,7 +205,6 @@ def predict(
     typer.echo(f"  Saved {len(out_df):,} rows → {output}")
 
 
-# ── evaluate ──────────────────────────────────────────────────────────────────
 @app.command()
 def evaluate(
     data: Path = typer.Option(
@@ -240,18 +225,15 @@ def evaluate(
     typer.echo(f"Model dir   : {model_dir}")
     typer.echo(f"Val fraction: {val_fraction:.0%}")
 
-    # ── Load model ────────────────────────────────────────────────────────────
     _section("Loading Model")
     suite = load_model_suite(model_dir)
     typer.echo(f"  ModelSuite loaded from {model_dir / MODEL_FILENAME}")
 
-    # ── Preprocess & features ─────────────────────────────────────────────────
     _section("Preprocessing & Feature Engineering")
     df = load_and_prepare(data)
     df = build_features(df)
     model_df = df[df[TARGET_COL].notna()].copy()
 
-    # ── Split ─────────────────────────────────────────────────────────────────
     train_df, val_df = chronological_split(model_df, val_fraction=val_fraction)
     X_val: pd.DataFrame = val_df[FEATURE_COLS]
     y_val: pd.Series = val_df[TARGET_COL]
@@ -264,13 +246,11 @@ def evaluate(
         f"val median={drift['val_median_h']:.1f}h  ({drift['drift_pct']:.1f}%)"
     )
 
-    # ── Evaluate all models ───────────────────────────────────────────────────
-    _section("Leaderboard — Val Set")
+    _section("Leaderboard - Val Set")
     results = _build_leaderboard_results(suite, X_val, y_val)
     print_leaderboard(results)
     typer.echo("\nDone.")
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app()

@@ -6,7 +6,6 @@ from typing import Any
 import ast
 import pandas as pd
 
-# ── Column ───────────────────────────────────────────────────────────────────
 REQUIRED_COLUMNS: list[str] = [
     "customer_id",
     "viewed_products",
@@ -23,7 +22,6 @@ PRODUCT_LIST_COLUMNS: list[str] = [
     "put_in_cart_products",
 ]
 
-# ── Step 0: Loading & Cleaning ──────────────────────────────────────────────
 def load_visits_data(data_path: str | Path) -> pd.DataFrame:
     """Load visits TSV and validate required columns."""
     path = Path(data_path)
@@ -67,7 +65,6 @@ def add_datetime_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# ── Step 1: Target variable ─────────────────────────────────────────────────
 def build_return_time_target(df: pd.DataFrame) -> pd.DataFrame:
     """Add return_hours target and visit metadata per customer timeline."""
     out = df.sort_values(["customer_id", "start_dt"]).reset_index(drop=True)
@@ -90,7 +87,6 @@ def build_return_time_target(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# ── Orchestrator ────────────────────────────────────────────────────────────
 def load_and_prepare(data_path: str | Path) -> pd.DataFrame:
     """Run full preprocessing: load, products, datetime features, target."""
     df = load_visits_data(data_path)
@@ -100,7 +96,6 @@ def load_and_prepare(data_path: str | Path) -> pd.DataFrame:
     return df
 
 
-# ── Optional: data quality check ────────────────────────────────────────────
 def audit_dataset(df: pd.DataFrame) -> dict[str, Any]:
     """Return a summary of basic data quality statistics for the DataFrame."""
     visits_per_customer = df.groupby("customer_id").size()

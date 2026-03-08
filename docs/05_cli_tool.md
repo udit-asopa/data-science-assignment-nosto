@@ -1,4 +1,4 @@
-# CLI Tool — Implementation Guide
+# CLI Tool - Implementation Guide
 
 This document explains the design, workflows, commands, and implementation of the
 script-based CLI tool for the customer return-time prediction pipeline.
@@ -59,7 +59,7 @@ python main.py train [OPTIONS]
 | `--model-dir` / `-m` | `scripts/models` | Directory to save the trained suite |
 | `--val-fraction` | `0.20` | Fraction of data (by time) held out for validation |
 
-**What it does — step by step:**
+**What it does - step by step:**
 
 1. Load and preprocess the TSV (`load_and_prepare`)
 2. Run all feature engineering (`build_features`)
@@ -70,7 +70,7 @@ python main.py train [OPTIONS]
 7. Print the evaluation leaderboard on the val set
 8. Save the entire `ModelSuite` to `<model-dir>/model_suite.joblib`
 
-**Example — custom paths:**
+**Example - custom paths:**
 
 ```bash
 python main.py train --data data/visits.tsv --model-dir scripts/models --val-fraction 0.15
@@ -105,7 +105,7 @@ python main.py predict [OPTIONS]
 | `predicted_return_days` | Same value in days (rounded to 2 d.p.) |
 | `return_hours` | Actual target value (only present for non-last-visit rows) |
 
-**Example — use the faster HGB model:**
+**Example - use the faster HGB model:**
 
 ```bash
 python main.py predict --model hgb --output output/hgb_predictions.tsv
@@ -179,7 +179,7 @@ python main.py predict --model global_baseline  # sanity check
 
 ## Implementation
 
-### `main.py` — Entry Point
+### `main.py` - Entry Point
 
 ```
 app = typer.Typer(name="nosto-return-time")
@@ -190,7 +190,7 @@ app = typer.Typer(name="nosto-return-time")
 ```
 
 `main.py` imports only the public API of each script module and wires them together.
-It contains no data-processing or statistical logic of its own — all of that lives
+It contains no data-processing or statistical logic of its own - all of that lives
 in `scripts/`.
 
 ---
@@ -235,7 +235,7 @@ FEATURE_COLS (single source of truth, consumed by data_modelling and evaluation)
  ├── Sequence (1): visit_counter_index
  │
  ├── Purchase history (3): ever_bought, cumulative_bought_visits, cumulative_buy_rate
- │       (shift(1) applied — values reflect history *before* the current visit)
+ │       (shift(1) applied - values reflect history *before* the current visit)
  │
  ├── Lag / recency (5): prev_gap_hours, prev_time_spent, prev_search_count,
  │       prev_viewed_count, prev_bought
@@ -262,7 +262,7 @@ Contains `chronological_split()` and the `ModelSuite` class.
 
 Splits the DataFrame at the `(1 − val_fraction)` quantile of `time_col` (defaults
 to `end_dt`). This mirrors a real deployment scenario where the model is trained on
-historical data and evaluated on future data — no random shuffling.
+historical data and evaluated on future data - no random shuffling.
 
 #### `ModelSuite`
 

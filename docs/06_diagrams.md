@@ -142,7 +142,7 @@ flowchart TD
 
 ## 6. Feature Engineering Pipeline
 
-All features use `shift(1)` within customer groups — no future leakage.
+All features use `shift(1)` within customer groups - no future leakage.
 
 ```mermaid
 flowchart TD
@@ -200,7 +200,7 @@ flowchart TD
 
 ## 8. Chronological Split
 
-No shuffling — the val set is always in the future relative to train.
+No shuffling - the val set is always in the future relative to train.
 
 ```mermaid
 flowchart TD
@@ -210,7 +210,7 @@ flowchart TD
     Q["split_time = quantile(1 - val_fraction) of end_dt"]
     TRAIN["train_df: end_dt <= split_time"]
     VAL["val_df:   end_dt >  split_time"]
-    OUT[("train_df, val_df — no overlap")]
+    OUT[("train_df, val_df - no overlap")]
 
     IN --> CHK
     CHK -->|No| ERR

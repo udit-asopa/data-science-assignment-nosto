@@ -23,7 +23,7 @@ Val   median : 15.8h  (0.7 days)
 Drift        : 48.7%  ⚠ SIGNIFICANT
 ```
 
-The validation period customers return roughly **twice as fast** as training period customers. This is the single largest performance constraint — models trained on the training distribution are systematically over-calibrated for longer return times.
+The validation period customers return roughly **twice as fast** as training period customers. This is the single largest performance constraint - models trained on the training distribution are systematically over-calibrated for longer return times.
 
 ---
 
@@ -40,7 +40,7 @@ preds = np.expm1(model.predict(X_val)).clip(min=0)
 **Why log1p?**
 - The raw target is heavily right-skewed (range: 0 – 3,000h+)
 - Log transform compresses the long tail and gives the model a near-normal signal to optimise
-- MAE on the log scale corresponds approximately to proportional errors — appropriate for a target that spans orders of magnitude
+- MAE on the log scale corresponds approximately to proportional errors - appropriate for a target that spans orders of magnitude
 - `expm1` (not `exp`) correctly inverts `log1p`, preserving the zero case
 
 ---
@@ -62,7 +62,7 @@ MAE : 32.32h
 Groups the training set by `(ever_bought × start_dayofweek)` and predicts the segment median. Falls back to the global median for unseen segments.
 
 ```
-MAE : 32.71h  (worse than global — segments don't generalise to val due to drift)
+MAE : 32.71h  (worse than global - segments don't generalise to val due to drift)
 ```
 
 The segmented baseline performing worse than global is an early indicator that train/val segment compositions differ.
@@ -73,7 +73,7 @@ The segmented baseline performing worse than global is an early indicator that t
 
 All tree-based models are evaluated with MAE on the validation set in original hours. A consistent pattern is used:
 
-- MAE objective (not MSE) — more robust to the heavy right tail
+- MAE objective (not MSE) - more robust to the heavy right tail
 - `log1p` target transform
 - Scikit-learn `Pipeline` wrapping imputer + model
 
@@ -81,7 +81,7 @@ All tree-based models are evaluated with MAE on the validation set in original h
 
 ### 4.4.1 HistGradientBoosting (HGB)
 
-Scikit-learn's native gradient boosting — **handles NaN natively** (no imputation step needed).
+Scikit-learn's native gradient boosting - **handles NaN natively** (no imputation step needed).
 
 ```python
 HistGradientBoostingRegressor(
@@ -96,7 +96,7 @@ HistGradientBoostingRegressor(
 
 | Val MAE | Val RMSE |
 |---|---|
-| 36.11h | — |
+| 36.11h | - |
 
 ---
 
@@ -122,7 +122,7 @@ Key tuning insight: `max_depth=10` outperformed deeper trees, confirming the mod
 
 | Val MAE | Val RMSE |
 |---|---|
-| 32.38h | — |
+| 32.00h | - |
 
 ---
 
@@ -146,13 +146,13 @@ xgb.XGBRegressor(
 
 | Val MAE | Val RMSE |
 |---|---|
-| 36.06h (tuned) | — |
+| 36.06h (tuned) | - |
 
 ---
 
 ### 4.4.4 LightGBM DART
 
-LightGBM with **DART boosting** (Dropouts meet Multiple Additive Regression Trees). DART applies dropout during the boosting process — each iteration, a random subset of trees is dropped, preventing any single tree from dominating.
+LightGBM with **DART boosting** (Dropouts meet Multiple Additive Regression Trees). DART applies dropout during the boosting process - each iteration, a random subset of trees is dropped, preventing any single tree from dominating.
 
 ```python
 lgb.LGBMRegressor(
@@ -166,13 +166,13 @@ lgb.LGBMRegressor(
 )
 ```
 
-**Why DART outperforms here**: under significant target drift, standard gradient boosting aggressively over-commits to the training distribution. DART's dropout regularisation forces the model to be less deterministic — it effectively learns a more generalised representation that happens to be more robust to the distribution shift in the validation period.
+**Why DART outperforms here**: under significant target drift, standard gradient boosting aggressively over-commits to the training distribution. DART's dropout regularisation forces the model to be less deterministic - it effectively learns a more generalised representation that happens to be more robust to the distribution shift in the validation period.
 
 The `.set_output(transform="pandas")` flag on the imputer preserves column names, which LightGBM uses to match features at predict time.
 
 | Val MAE | Notes |
 |---|---|
-| **29.98h** | **Best model — beats baseline by 7.2%** |
+| **29.98h** | **Best model - beats baseline by 7.2%** |
 
 ---
 
@@ -180,7 +180,7 @@ The `.set_output(transform="pandas")` flag on the imputer preserves column names
 
 ### Cross-validation approach
 
-`TimeSeriesSplit(n_splits=5)` is used throughout — this creates 5 expanding-window train/val folds that respect temporal order, preventing future data from appearing in any CV training fold.
+`TimeSeriesSplit(n_splits=5)` is used throughout - this creates 5 expanding-window train/val folds that respect temporal order, preventing future data from appearing in any CV training fold.
 
 ```
 Fold 1: train [0..20%]     val [20..40%]
@@ -191,12 +191,12 @@ Fold 4: train [0..80%]     val [80..100%]  ← closest to true val
 
 ### Two-stage tuning (RF and XGBoost)
 
-1. **Stage 1 — `RandomizedSearchCV`**: wide parameter ranges, 30 random samples → identifies the best region cheaply
-2. **Stage 2 — `GridSearchCV`**: tight grid centred on Stage 1 winner → exhaustive search of nearby values
+1. **Stage 1 - `RandomizedSearchCV`**: wide parameter ranges, 30 random samples → identifies the best region cheaply
+2. **Stage 2 - `GridSearchCV`**: tight grid centred on Stage 1 winner → exhaustive search of nearby values
 
 ### Caveat
 
-CV MAE scores are in `log1p` scale (≈1.4) and are not directly comparable to validation MAE in hours (≈30–38h). CV scores also use older data as validation — they cannot account for the drift to the true val period, so CV performance is an imperfect proxy for true generalisation.
+CV MAE scores are in `log1p` scale (≈1.4) and are not directly comparable to validation MAE in hours (≈30–38h). CV scores also use older data as validation - they cannot account for the drift to the true val period, so CV performance is an imperfect proxy for true generalisation.
 
 ---
 
@@ -210,6 +210,6 @@ Pipeline([
 ```
 
 Benefits:
-- Imputation is fitted on training data only — no val statistics leak into imputed values
+- Imputation is fitted on training data only - no val statistics leak into imputed values
 - `GridSearchCV`/`RandomizedSearchCV` wraps the whole pipeline, so imputation is re-fitted on each CV fold
 - Predict-time calls go through the same imputation automatically

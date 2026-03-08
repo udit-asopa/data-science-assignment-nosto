@@ -1,4 +1,4 @@
-# Customer Return Time Prediction — Documentation
+# Customer Return Time Prediction - Documentation
 
 ## Overview
 
@@ -19,10 +19,10 @@ This project predicts how many hours a customer will take to return to a webshop
 
 ## Quick Summary
 
-- **Task**: Regression — predict `return_hours` (hours until next visit) from current visit features
+- **Task**: Regression - predict `return_hours` (hours until next visit) from current visit features
 - **Data**: ~40k visit rows, ~7 weeks (Jul 20 – Sep 9 2024), single webshop
 - **Split**: Chronological 80/20 on `end_dt` (no data leakage)
-- **Best model**: LightGBM DART — **MAE 29.98h** (beats global median baseline by 7.2%)
+- **Best model**: LightGBM DART - **MAE 29.98h** (beats global median baseline by 7.2%)
 - **Key finding**: 48.7% target drift between train and val periods is the dominant performance constraint
 
 ---
@@ -32,11 +32,11 @@ This project predicts how many hours a customer will take to return to a webshop
 The end-to-end implementation lives in [`interview-task.ipynb`](../interview-task.ipynb), structured as:
 
 ```
-Step 0 — Loading & Data Prep
-Step 1 — Target Variable Definition
-Step 2 — Exploratory Data Analysis  (5 sub-analyses)
-Step 3 — Feature Engineering
-Step 4 — Modelling
+Step 0 - Loading & Data Prep
+Step 1 - Target Variable Definition
+Step 2 - Exploratory Data Analysis  (5 sub-analyses)
+Step 3 - Feature Engineering
+Step 4 - Modelling
   4.1  Train/Val Split + Drift Check
   4.2  Distribution Check (train vs val)
   4.3  Baseline Models

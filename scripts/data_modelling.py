@@ -21,10 +21,6 @@ TARGET_COL: str = "return_hours"
 MODEL_FILENAME: str = "model_suite.joblib"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ── Utility: chronological train / val split ─────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 def chronological_split(
     df: pd.DataFrame,
@@ -46,10 +42,6 @@ def chronological_split(
     val_df = df[df[time_col] > split_time].copy()
     return train_df, val_df
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# ── ModelSuite class ──────────────────────────────────────────────────────────
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class ModelSuite:
@@ -208,7 +200,7 @@ class ModelSuite:
             )
         model = model_map[model_name]
         if model is None:
-            raise RuntimeError("Model not trained — call train_all() first.")
+            raise RuntimeError("Model not trained - call train_all() first.")
 
         return np.expm1(model.predict(X)).clip(min=0)
 
