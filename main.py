@@ -13,7 +13,7 @@ Usage examples
 --------------
   python main.py train   --data data/visits.tsv
   python main.py predict --data data/visits.tsv --output output/predictions.tsv
-    python main.py evaluate --data data/visits.tsv
+  python main.py evaluate --data data/visits.tsv
 """
 
 from __future__ import annotations
@@ -150,8 +150,8 @@ def train(
 
     # ── Evaluation ────────────────────────────────────────────────────────────
     _section("Evaluation — Val Set")
-    X_val = val_df[FEATURE_COLS]
-    y_val = val_df[TARGET_COL]
+    X_val: pd.DataFrame = val_df[FEATURE_COLS]
+    y_val: pd.Series = val_df[TARGET_COL]
     results = _build_leaderboard_results(suite, X_val, y_val)
     print_leaderboard(results)
 
@@ -241,6 +241,7 @@ def evaluate(
     typer.echo(f"Val fraction: {val_fraction:.0%}")
 
     # ── Load model ────────────────────────────────────────────────────────────
+    _section("Loading Model")
     suite = load_model_suite(model_dir)
     typer.echo(f"  ModelSuite loaded from {model_dir / MODEL_FILENAME}")
 
@@ -252,8 +253,8 @@ def evaluate(
 
     # ── Split ─────────────────────────────────────────────────────────────────
     train_df, val_df = chronological_split(model_df, val_fraction=val_fraction)
-    X_val = val_df[FEATURE_COLS]
-    y_val = val_df[TARGET_COL]
+    X_val: pd.DataFrame = val_df[FEATURE_COLS]
+    y_val: pd.Series = val_df[TARGET_COL]
     typer.echo(f"  Validation rows: {len(val_df):,}")
 
     drift = check_target_drift(train_df[TARGET_COL], y_val)

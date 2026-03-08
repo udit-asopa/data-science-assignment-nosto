@@ -110,7 +110,7 @@ def audit_dataset(df: pd.DataFrame) -> dict[str, Any]:
         "missing_values": {k: int(v) for k, v in df.isna().sum().items()},
         "duplicate_rows": int(df.duplicated().sum()),
         "negative_time_spent_count": int(
-            (df["time_spent_in_minutes"] < 0).sum()
+            (df["time_spent_in_minutes"] < pd.Timedelta(0)).sum()
         ),
         "visits_per_customer_min": int(visits_per_customer.min()),
         "visits_per_customer_median": float(visits_per_customer.median()),
