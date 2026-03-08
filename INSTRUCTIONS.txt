@@ -1,0 +1,89 @@
+====================================================
+ Nosto Data Science Assignment — Udit Asopa
+====================================================
+
+ENVIRONMENT SETUP
+-----------------
+This project uses pixi for reproducible environments.
+
+  1. Install pixi: https://prefix.dev/docs/pixi/overview
+  2. From the project root:
+       pixi install
+
+Alternatively, install manually:
+  pip install pandas numpy matplotlib scikit-learn xgboost lightgbm typer joblib
+
+Python version: 3.12
+
+
+RUNNING THE NOTEBOOK
+--------------------
+  
+  pixi run jupyter-notebook interview-task.ipynb
+  or
+  jupyter notebook interview-task.ipynb
+
+
+The notebook runs top-to-bottom with no configuration needed.
+All data is in data/visits.tsv (included).
+Expected runtime: ~10-15 min on a standard laptop
+(dominated by permutation importance computation).
+
+
+RUNNING THE CLI TOOL
+--------------------
+  # Train all models and evaluate on validation set
+  python main.py train
+
+  # Generate predictions on the dataset
+  python main.py predict --output output/predictions.tsv
+
+  # Re-run evaluation on a previously trained suite
+  python main.py evaluate
+
+  # Help
+  python main.py --help
+
+
+PROJECT STRUCTURE
+-----------------
+  interview-task.ipynb          Main notebook
+  main.py                       CLI entry point
+  pixi.toml                     Environment definition
+
+  scripts/
+    data_preprocessing.py       Loading, parsing, target definition
+    feature_engineering.py      26 leak-safe features
+    data_modelling.py           ModelSuite class (all 4 models + baselines)
+    evaluation.py               Metrics, leaderboard, drift check
+    helper_functions.py         JSON I/O utilities
+
+  docs/
+    overview.md                 Quick summary + notebook structure
+    01_problem_and_data.md      Problem definition, EDA findings
+    02_feature_engineering.md   Feature catalogue + leakage prevention
+    03_modelling.md             Model architectures + tuning approach
+    04_results_and_findings.md  Results, drift analysis, next steps
+    05_cli_tool.md              CLI implementation guide
+    06_diagrams.md              Pipeline diagrams (Mermaid)
+
+  data/
+    visits.tsv                  Raw input data
+
+
+KEY RESULTS
+-----------
+  Global Median Baseline   MAE = 32.32h
+  LightGBM DART (best)     MAE = 29.98h  (+7.2% improvement)
+
+  Note: 48.7% target drift between train and val periods is the
+  dominant performance constraint — documented in the notebook
+  and docs/04_results_and_findings.md.
+
+
+REPRODUCIBILITY
+---------------
+  All random states fixed (random_state=42).
+  Chronological split is deterministic (80th percentile of end_dt).
+  No external data or pre-trained weights required.
+====================================================
