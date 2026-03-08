@@ -108,7 +108,7 @@ def audit_dataset(df: pd.DataFrame) -> dict[str, Any]:
         "row_count": int(len(df)),
         "unique_customers": int(df["customer_id"].nunique()),
         "missing_values": {k: int(v) for k, v in df.isna().sum().items()},
-        "duplicate_rows": int(df.duplicated().sum()),
+        "duplicate_rows": int(df.duplicated(subset=["customer_id", "end"]).sum()),
         "negative_time_spent_count": int(
             (df["time_spent_in_minutes"] < pd.Timedelta(0)).sum()
         ),

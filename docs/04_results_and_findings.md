@@ -6,9 +6,9 @@
 |---|---|---|---|
 | Global Median Baseline | 32.32 | — | Predicts 30.9h for every row |
 | Segmented Median (ever_bought × dow) | 32.71 | −1.2% ↓ | Worse — drift breaks segment medians |
-| HistGradientBoosting | 36.11 | −11.7% ↓ | |
-| Random Forest (tuned) | 32.38 | −0.2% ↓ | Marginal — near-baseline level |
-| XGBoost (tuned) | 36.06 | −11.5% ↓ | |
+| HistGradientBoosting | 36.11 | −11.8% ↓ | |
+| Random Forest (tuned) | 32.00 | +1.0% ↑ | Marginal — near-baseline level |
+| XGBoost (tuned) | 36.06 | −11.6% ↓ | |
 | **LightGBM DART** | **29.98** | **+7.2% ↑** | **Best — only model to beat baseline** |
 
 All models trained on `log1p(return_hours)`, evaluated on original hours with `expm1(prediction)`.

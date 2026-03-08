@@ -268,6 +268,7 @@ def evaluate(
     _section("Leaderboard — Val Set")
     results = _build_leaderboard_results(suite, X_val, y_val)
     print_leaderboard(results)
+    typer.echo("\nDone.")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

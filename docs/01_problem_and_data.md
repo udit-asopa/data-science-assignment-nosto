@@ -66,7 +66,7 @@ The target is heavily **right-skewed** with a log-normal shape. A `log1p` transf
 
 ### EDA 2.1 — Visit frequency per customer
 
-- **63% of customers appear only once** in the 7-week window
+- **71.6% of customers appear only once** in the 7-week window
 - Median visits per customer: 1; mean: ~1.7
 - Long tail: a small number of customers visit 10–20+ times
 

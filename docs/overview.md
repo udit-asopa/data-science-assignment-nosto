@@ -29,7 +29,7 @@ This project predicts how many hours a customer will take to return to a webshop
 
 ## Notebook
 
-The end-to-end implementation lives in [`temp2.ipynb`](../temp2.ipynb), structured as:
+The end-to-end implementation lives in [`interview-task.ipynb`](../interview-task.ipynb), structured as:
 
 ```
 Step 0 — Loading & Data Prep

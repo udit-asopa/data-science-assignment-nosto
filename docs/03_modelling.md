@@ -139,7 +139,6 @@ xgb.XGBRegressor(
     max_depth=8,
     min_child_weight=50,     # analogous to min_samples_leaf
     subsample=0.8,           # row subsampling per tree
-    colsample_bytree=1.0,    # no feature subsampling
     objective="reg:absoluteerror",
     random_state=42,
 )

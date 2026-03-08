@@ -100,10 +100,9 @@ def add_purchase_history_features(df: pd.DataFrame) -> pd.DataFrame:
     out["cumulative_bought_visits"] = (
         past_bought.groupby(out["customer_id"]).cumsum().astype(int)
     )
-    out["past_visits_count"] = out["visit_counter_index"]
     out["cumulative_buy_rate"] = (
-        out["cumulative_bought_visits"] / out["past_visits_count"]
-    ).where(out["past_visits_count"] > 0)  # NaN for first visit (no history)
+        out["cumulative_bought_visits"] / out["visit_counter_index"]
+    ).where(out["visit_counter_index"] > 0)  # NaN for first visit (no history)
 
     return out
 
@@ -123,13 +122,13 @@ def add_lag_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     grp = out.groupby("customer_id")
 
-    out["prev_end_dt"] = grp["end_dt"].shift(1)
     out["prev_time_spent"] = grp["time_spent_in_minutes"].shift(1)
     out["prev_search_count"] = grp["num_of_times_search_was_used"].shift(1)
     out["prev_viewed_count"] = grp["total_viewed_products"].shift(1)
     out["prev_bought"] = grp["visit_bought_flag"].shift(1).astype(float)
 
-    gap_td = out["start_dt"] - out["prev_end_dt"]
+    prev_end_dt = grp["end_dt"].shift(1)
+    gap_td = out["start_dt"] - prev_end_dt
     out["prev_gap_hours"] = (gap_td.dt.total_seconds() / 3600).clip(lower=0)
 
     return out

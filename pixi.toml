@@ -7,12 +7,16 @@ version = "0.1.0"
 
 [tasks]
 nosto_pred = "python main.py"
+nosto_pred_train = "python main.py train"
+nosto_pred_predict = "python main.py predict"
+nosto_pred_evaluate = "python main.py evaluate"
+
 
 [dependencies]
 python = "3.12.*"
 pandas = ">=3.0.1,<4"
 numpy = ">=2.4.2,<3"
-pathlib = ">=1.0.1,<2"
+joblib = ">=1.5.3,<2"
 typer = ">=0.24.0,<0.25"
 jupyter = ">=1.1.1,<2"
 python-dateutil = ">=2.9.0,<3"
